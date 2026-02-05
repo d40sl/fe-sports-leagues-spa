@@ -1,5 +1,4 @@
 import { apiGet, ApiError } from './client'
-import { apiCache } from './cache'
 import { ENDPOINTS } from '@/constants/api'
 import type { League, LeaguesResponse, SeasonBadge, SeasonsResponse } from '@/types/league'
 
@@ -39,8 +38,8 @@ export async function fetchAllLeagues(signal?: AbortSignal): Promise<NormalizedL
 }
 
 /**
- * Fetch season badge for a specific league with negative caching
- * Returns the most recent badge (last item in array) or null if none available
+ * Fetch season badge for a specific league
+ * Returns the most recent season that has a badge, or null if none available
  *
  * @param leagueId - The league ID to fetch badge for
  * @param signal - Optional AbortSignal for request cancellation
@@ -55,13 +54,20 @@ export async function fetchLeagueBadge(
     const response = await apiGet<SeasonsResponse>(url, signal)
 
     if (!response.seasons || response.seasons.length === 0) {
-      // Cache empty response to avoid repeated requests
-      apiCache.setNegative(url, response)
       return null
     }
 
-    // Return the most recent season (last in array)
-    return response.seasons[response.seasons.length - 1]
+    // Find the most recent season that actually has a badge (search from end)
+    // Not all seasons have badges, so we need to find one that does
+    for (let i = response.seasons.length - 1; i >= 0; i--) {
+      const season = response.seasons[i]
+      if (season.strBadge) {
+        return season
+      }
+    }
+
+    // No season with a badge found
+    return null
   } catch (error) {
     // Don't cache aborted requests
     if (error instanceof ApiError && error.isAborted) {
