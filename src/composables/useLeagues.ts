@@ -110,7 +110,7 @@ export function useLeagues() {
   }
 
   /**
-   * Set page size and reset to page 1
+   * Set page size (resets to page 1 via watcher)
    */
   function setPageSize(size: number) {
     pageSize.value = size

@@ -1,4 +1,4 @@
-import { apiGet, ApiError } from './client'
+import { apiGet } from './client'
 import { ENDPOINTS } from '@/constants/api'
 import type { League, LeaguesResponse, SeasonBadge, SeasonsResponse } from '@/types/league'
 
@@ -49,32 +49,23 @@ export async function fetchLeagueBadge(
   signal?: AbortSignal
 ): Promise<SeasonBadge | null> {
   const url = ENDPOINTS.SEASON_BADGES(leagueId)
+  const response = await apiGet<SeasonsResponse>(url, signal)
 
-  try {
-    const response = await apiGet<SeasonsResponse>(url, signal)
-
-    if (!response.seasons || response.seasons.length === 0) {
-      return null
-    }
-
-    // Find the most recent season that actually has a badge (search from end)
-    // Not all seasons have badges, so we need to find one that does
-    for (let i = response.seasons.length - 1; i >= 0; i--) {
-      const season = response.seasons[i]
-      if (season.strBadge) {
-        return season
-      }
-    }
-
-    // No season with a badge found
+  if (!response.seasons || response.seasons.length === 0) {
     return null
-  } catch (error) {
-    // Don't cache aborted requests
-    if (error instanceof ApiError && error.isAborted) {
-      throw error
-    }
-    throw error
   }
+
+  // Find the most recent season that actually has a badge (search from end)
+  // Not all seasons have badges, so we need to find one that does
+  for (let i = response.seasons.length - 1; i >= 0; i--) {
+    const season = response.seasons[i]
+    if (season.strBadge) {
+      return season
+    }
+  }
+
+  // No season with a badge found
+  return null
 }
 
 /**
