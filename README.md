@@ -17,35 +17,42 @@ A single-page application that displays sports leagues from TheSportsDB API with
 ## Architecture Overview
 
 ```
-src/
-├── api/
-│   ├── cache.ts          # In-memory Map-based cache
-│   ├── client.ts         # Fetch wrapper with timeout and error handling
-│   └── leagues.ts        # League and badge API functions
-├── components/
-│   ├── BadgeModal.vue    # Modal with badge image and loading states
-│   ├── LeagueCard.vue    # Table row (clickable, keyboard accessible)
-│   ├── LeagueFilters.vue # Search input + sport dropdown
-│   └── LeagueList.vue    # Table with pagination
-├── composables/
-│   └── useLeagues.ts     # Data fetching, filtering, pagination state
-├── constants/
-│   └── api.ts            # API endpoints and configuration
-├── types/
-│   └── league.ts         # TypeScript interfaces
-├── styles/
-│   └── _variables.scss   # Design tokens
-├── utils/
-│   └── debounce.ts       # Debounce utility with cancel support
-├── App.vue               # Root component
-└── main.ts               # Entry point
+├── api/                      # Serverless functions (Vercel)
+│   ├── leagues.ts            # Proxy for all_leagues.php
+│   └── seasons.ts            # Proxy for search_all_seasons.php
+├── src/
+│   ├── api/
+│   │   ├── cache.ts          # In-memory cache with TTL and LRU eviction
+│   │   ├── client.ts         # Fetch wrapper with timeout, abort, deduplication
+│   │   └── leagues.ts        # League and badge API functions
+│   ├── components/
+│   │   ├── BadgeModal.vue    # Modal with badge image and loading states
+│   │   ├── LeagueCard.vue    # Table row (clickable, keyboard accessible)
+│   │   ├── LeagueFilters.vue # Search input + sport dropdown
+│   │   └── LeagueList.vue    # Table with pagination
+│   ├── composables/
+│   │   ├── useBadges.ts      # Badge prefetching and store
+│   │   └── useLeagues.ts     # Data fetching, filtering, pagination state
+│   ├── constants/
+│   │   └── api.ts            # API endpoints and configuration
+│   ├── types/
+│   │   └── league.ts         # TypeScript interfaces
+│   ├── styles/
+│   │   └── _variables.scss   # Design tokens
+│   ├── utils/
+│   │   └── debounce.ts       # Debounce utility with cancel support
+│   ├── App.vue               # Root component
+│   └── main.ts               # Entry point
+└── .env                      # API key configuration (git-ignored)
 ```
 
 **Design Decisions:**
-- Composition API composable (`useLeagues`) for state management — no Pinia needed
+- Composition API composables (`useLeagues`, `useBadges`) for state management — no Pinia needed
 - `shallowRef` for large arrays to avoid deep reactivity overhead
 - Debounced search input to prevent excessive filtering
-- API caching at client level (transparent to components)
+- API proxy layer to keep API keys secure server-side
+- LRU cache with TTL for API responses (transparent to components)
+- Badge prefetching for instant modal display
 - Teleport for modal (proper stacking context)
 
 ## Tech Stack
@@ -69,10 +76,34 @@ Vue 3 was chosen as the assignment places no version restriction and it is the o
 git clone <repo-url>
 cd sports-leagues
 npm install
+cp .env.example .env    # Configure API key
 npm run dev
 ```
 
 Dev server runs at: `http://localhost:5173`
+
+## API Key Configuration
+
+The API key is stored securely on the server side and **never exposed to the frontend**.
+
+1. Copy `.env.example` to `.env`
+2. Set your API key:
+
+```bash
+# Free tier (limited to 10 Soccer leagues)
+SPORTSDB_API_KEY=123
+
+# Premium tier (3000+ leagues across all sports)
+SPORTSDB_API_KEY=your_premium_key_here
+```
+
+**How it works:**
+- Frontend calls `/api/leagues` and `/api/seasons?id=...`
+- Vite dev server proxies requests, injecting the API key server-side
+- In production (Vercel), serverless functions handle the proxy
+- The key never appears in browser network requests, source code, or build artifacts
+
+To upgrade: Get your premium key from [TheSportsDB profile](https://www.thesportsdb.com/) after upgrading, update `.env`, and restart the dev server.
 
 ## Available Scripts
 
@@ -95,19 +126,20 @@ Expected output: 40 tests passing across 5 test suites (cache, client, leagues, 
 
 ## Performance Considerations
 
-- **Bundle size**: ~90KB total (~33KB gzipped) — no UI framework dependencies
+- **Bundle size**: ~82KB total (~32KB gzipped) — no UI framework dependencies
 - **Debounced search**: 250ms delay prevents re-filtering on every keystroke
+- **Pre-normalized search**: Search fields lowercased once at load time, not per-filter
 - **Shallow reactivity**: Large arrays use `shallowRef()` to avoid deep tracking
-- **API caching**: Responses cached in memory; repeat requests return instantly
+- **API caching**: LRU cache with 5-minute TTL; in-flight request deduplication
 - **Computed properties**: Filtering uses Vue's `computed()` for automatic memoization
-- **Lazy badge loading**: Badge API called only when modal opens, then cached
+- **Badge prefetching**: Badges fetched in background after leagues load; modal opens instantly
 
 ## Security Notes
 
-- No `v-html` usage (XSS prevention)
-- Image URLs from API validated via `@error` handler with SVG fallback
-- No sensitive data stored or transmitted
-- API key is public free-tier key (no secrets)
+- **API key protected**: Key stored in environment variable, proxied server-side, never exposed to frontend
+- **Input validation**: League IDs validated as numeric before API calls (injection prevention)
+- **No `v-html` usage**: XSS prevention
+- **Image error handling**: API URLs validated via `@error` handler with SVG fallback
 
 ## Trade-offs & Assumptions
 
@@ -119,17 +151,17 @@ Expected output: 40 tests passing across 5 test suites (cache, client, leagues, 
 
 ## API Note
 
-This app uses TheSportsDB free tier API (key "3"). The `all_leagues.php` endpoint returns **10 Soccer leagues** on the free tier vs **3000+ leagues across all sports** on premium. The sport dropdown will only show "Soccer" with free tier access. The code architecture correctly derives dropdown options from the full API response and would display all sports with premium access.
+This app uses TheSportsDB API. The free tier (key `123`) returns **10 Soccer leagues** while premium returns **3000+ leagues across all sports**. The sport dropdown will only show "Soccer" with free tier access. The architecture correctly derives dropdown options from the API response and displays all sports with premium access.
+
+To unlock the full experience, configure a premium API key in `.env`.
 
 ## Known Limitations
 
-- Badge modal doesn't preload images
 - No virtual scrolling (pagination handles large datasets instead)
 
 ## Future Improvements
 
 - Add skeleton loading states instead of spinners
-- Add badge image preloading on hover
 - Virtual scrolling for premium tier (3000+ leagues)
 - E2E tests with Playwright
 - Visual regression testing
