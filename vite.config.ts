@@ -32,12 +32,13 @@ export default defineConfig(({ mode }) => {
           rewrite: () => '/all_leagues.php'
         },
         '/api/seasons': {
-          target: `https://www.thesportsdb.com/api/v1/json/${apiKey}`,
+          target: `https://www.thesportsdb.com`,
           changeOrigin: true,
           rewrite: (path) => {
-            const url = new URL(path, 'http://localhost')
-            const id = url.searchParams.get('id')
-            return `/search_all_seasons.php?badge=1&id=${id}`
+            // path includes query string: /api/seasons?id=4328
+            const idMatch = path.match(/[?&]id=(\d+)/)
+            const id = idMatch ? idMatch[1] : ''
+            return `/api/v1/json/${apiKey}/search_all_seasons.php?badge=1&id=${id}`
           }
         }
       }
