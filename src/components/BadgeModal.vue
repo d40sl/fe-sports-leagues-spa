@@ -40,16 +40,21 @@ async function loadBadge(leagueId: string) {
   badge.value = null
 
   try {
+    console.log('[BadgeModal] Fetching badge for league:', leagueId)
     const result = await fetchLeagueBadge(leagueId, abortController.signal)
+    console.log('[BadgeModal] Badge result:', result)
 
     // Check if this is still the current request
     if (currentLeagueId !== leagueId) {
+      console.log('[BadgeModal] Stale response, ignoring')
       return
     }
 
     badge.value = result
     isLoading.value = false
   } catch (err) {
+    console.error('[BadgeModal] Error fetching badge:', err)
+
     // Ignore aborted requests
     if (err instanceof ApiError && err.isAborted) {
       return

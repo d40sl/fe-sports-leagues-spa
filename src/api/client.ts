@@ -86,19 +86,23 @@ export async function apiGet<T>(url: string, signal?: AbortSignal): Promise<T> {
   // Create the request promise
   const requestPromise = (async () => {
     try {
+      console.log('[apiGet] Fetching:', url)
       const response = await fetchWithTimeout(url, {}, REQUEST_TIMEOUT_MS, signal)
+      console.log('[apiGet] Response status:', response.status, response.statusText)
 
       if (!response.ok) {
         throw new ApiError(`HTTP error: ${response.statusText}`, response.status)
       }
 
       const data = (await response.json()) as T
+      console.log('[apiGet] Data received:', data)
 
       // Cache successful response
       apiCache.set(url, data)
 
       return data
     } catch (error) {
+      console.error('[apiGet] Error:', error)
       if (error instanceof ApiError) {
         throw error
       }
