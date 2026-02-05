@@ -31,7 +31,6 @@ A single-page application that displays sports leagues from TheSportsDB API with
 │   │   ├── LeagueFilters.vue # Search input + sport dropdown
 │   │   └── LeagueList.vue    # Table with pagination
 │   ├── composables/
-│   │   ├── useBadges.ts      # Badge prefetching and store
 │   │   └── useLeagues.ts     # Data fetching, filtering, pagination state
 │   ├── constants/
 │   │   └── api.ts            # API endpoints and configuration
@@ -47,12 +46,11 @@ A single-page application that displays sports leagues from TheSportsDB API with
 ```
 
 **Design Decisions:**
-- Composition API composables (`useLeagues`, `useBadges`) for state management — no Pinia needed
+- Composition API composable (`useLeagues`) for state management — no Pinia needed
 - `shallowRef` for large arrays to avoid deep reactivity overhead
 - Debounced search input to prevent excessive filtering
 - API proxy layer to keep API keys secure server-side
 - LRU cache with TTL for API responses (transparent to components)
-- Badge prefetching for instant modal display
 - Teleport for modal (proper stacking context)
 
 ## Tech Stack
@@ -132,7 +130,7 @@ Expected output: 40 tests passing across 5 test suites (cache, client, leagues, 
 - **Shallow reactivity**: Large arrays use `shallowRef()` to avoid deep tracking
 - **API caching**: LRU cache with 5-minute TTL; in-flight request deduplication
 - **Computed properties**: Filtering uses Vue's `computed()` for automatic memoization
-- **Badge prefetching**: Badges fetched in background after leagues load; modal opens instantly
+- **On-demand badge loading**: Badges fetched when modal opens; cached for subsequent views
 
 ## Security Notes
 

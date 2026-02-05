@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, watch, onUnmounted, nextTick, ref } from 'vue'
-import { useBadges } from '@/composables/useBadges'
+import { ref, watch, onUnmounted, nextTick } from 'vue'
+import { fetchLeagueBadge } from '@/api/leagues'
+import { ApiError } from '@/api/client'
 import { BADGE_PLACEHOLDER } from '@/constants/api'
-import type { League } from '@/types/league'
+import type { League, SeasonBadge } from '@/types/league'
 
 const props = defineProps<{
   visible: boolean
@@ -16,71 +17,105 @@ const emit = defineEmits<{
 const modalContent = ref<HTMLElement | null>(null)
 const closeButton = ref<HTMLButtonElement | null>(null)
 
-// Use the shared badge store
-const { badgeStore, getBadgeEntry, retryBadge } = useBadges()
+// Badge state
+const badge = ref<SeasonBadge | null>(null)
+const isLoading = ref(false)
+const error = ref<string | null>(null)
 
-// Computed: get badge entry for current league (reactive)
-const badgeEntry = computed(() => {
-  if (!props.league) return null
-  return getBadgeEntry(props.league.idLeague)
-})
+// Track current request to prevent stale responses
+let currentLeagueId: string | null = null
+let abortController: AbortController | null = null
 
-// Computed: badge status
-const status = computed(() => badgeEntry.value?.status ?? 'idle')
+async function loadBadge(leagueId: string) {
+  // Cancel previous request if any
+  if (abortController) {
+    abortController.abort()
+  }
 
-// Computed: badge data
-const badge = computed(() => badgeEntry.value?.badge ?? null)
+  abortController = new AbortController()
+  currentLeagueId = leagueId
 
-// Force reactivity by accessing badgeStore
- 
-const _forceReactivity = computed(() => badgeStore.size)
+  isLoading.value = true
+  error.value = null
+  badge.value = null
+
+  try {
+    const result = await fetchLeagueBadge(leagueId, abortController.signal)
+
+    // Check if this is still the current request
+    if (currentLeagueId !== leagueId) {
+      return
+    }
+
+    badge.value = result
+    isLoading.value = false
+  } catch (err) {
+    // Ignore aborted requests
+    if (err instanceof ApiError && err.isAborted) {
+      return
+    }
+
+    // Only update if still current request
+    if (currentLeagueId === leagueId) {
+      error.value = err instanceof Error ? err.message : 'Failed to load badge'
+      isLoading.value = false
+    }
+  }
+}
+
+function handleRetry() {
+  if (props.league) {
+    loadBadge(props.league.idLeague)
+  }
+}
 
 function handleImageError(event: Event) {
   const img = event.target as HTMLImageElement
   img.src = BADGE_PLACEHOLDER
 }
 
-async function handleRetry() {
-  if (props.league) {
-    await retryBadge(props.league.idLeague)
-  }
-}
+// Load badge when league changes
+watch(
+  () => props.league,
+  (newLeague) => {
+    if (newLeague) {
+      loadBadge(newLeague.idLeague)
+    } else {
+      badge.value = null
+      isLoading.value = false
+      error.value = null
+      currentLeagueId = null
+    }
+  },
+  { immediate: true }
+)
 
-// Focus management, focus trap, and body scroll lock
+// Focus management and body scroll lock
 let previouslyFocusedElement: HTMLElement | null = null
 
 watch(
   () => props.visible,
   async (isVisible) => {
     if (isVisible) {
-      // Store the element that had focus before opening
       previouslyFocusedElement = document.activeElement as HTMLElement
-
-      // Lock body scroll
       document.body.style.overflow = 'hidden'
-
-      // Focus close button after render
       await nextTick()
       closeButton.value?.focus()
     } else {
-      // Restore body scroll
       document.body.style.overflow = ''
-
-      // Restore focus to previously focused element
       previouslyFocusedElement?.focus()
       previouslyFocusedElement = null
     }
   }
 )
 
-// Focus trap: keep focus within modal
+// Focus trap
 function handleKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') {
     emit('close')
     return
   }
 
-  // Focus trap: Tab key cycles within modal
   if (event.key === 'Tab' && modalContent.value) {
     const focusableElements = modalContent.value.querySelectorAll<HTMLElement>(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
@@ -101,9 +136,10 @@ function handleKeydown(event: KeyboardEvent) {
   }
 }
 
-// Cleanup on unmount
+// Cleanup
 onUnmounted(() => {
   document.body.style.overflow = ''
+  abortController?.abort()
 })
 </script>
 
@@ -146,8 +182,8 @@ onUnmounted(() => {
         </div>
 
         <div class="modal__body">
-          <!-- Loading State (still prefetching) -->
-          <div v-if="status === 'loading' || status === 'idle'" class="modal__loading">
+          <!-- Loading State -->
+          <div v-if="isLoading" class="modal__loading">
             <div class="spinner">
               <span class="spinner__circle"></span>
             </div>
@@ -155,18 +191,18 @@ onUnmounted(() => {
           </div>
 
           <!-- Error State -->
-          <div v-else-if="status === 'error'" class="modal__error">
-            <p>Failed to load badge. Please try again.</p>
-            <button class="btn btn--secondary" type="button" @click="handleRetry">Try Again</button>
+          <div v-else-if="error" class="modal__error">
+            <p>{{ error }}</p>
+            <button class="btn btn--secondary" type="button" @click="handleRetry">
+              Try Again
+            </button>
           </div>
 
           <!-- Success State -->
-          <div v-else-if="status === 'success'" class="modal__content">
-            <!-- Hidden element to force reactivity -->
-            <span v-if="_forceReactivity" style="display: none"></span>
+          <div v-else class="modal__content">
             <div class="badge-container">
               <img
-                v-if="badge && badge.strBadge"
+                v-if="badge?.strBadge"
                 :src="badge.strBadge"
                 :alt="`${league?.strLeague} ${badge.strSeason} badge`"
                 class="badge-image"
