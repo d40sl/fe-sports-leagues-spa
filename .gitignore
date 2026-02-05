@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Test coverage
+coverage/
+
+# Vite
+*.local
+
+# TypeScript cache
+*.tsbuildinfo
+
+# LLM / AI agent artifacts
+.claude/
+.claude_memory/
+.codex/
+.cursor/
+.continue/
+.aider*
+.copilot/
+.github/copilot/
+.codeium/
+.tabnine/
+.windsurf/
+CLAUDE.md
+.cursorignore
+.cursorconfig
+.cursorrules
+.aiderignore
