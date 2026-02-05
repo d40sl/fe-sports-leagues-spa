@@ -1,14 +1,17 @@
 /**
- * TheSportsDB API configuration
- * Using the free tier API key "3"
- * Free tier returns limited results; premium returns full dataset
+ * API endpoints configuration
+ *
+ * All requests go through our API proxy which:
+ * - Keeps the API key secure on the server side
+ * - Works with both free tier (key: 3) and premium keys
+ * - Adds caching headers for better performance
+ *
+ * Development: Vite dev server proxies to TheSportsDB
+ * Production: Vercel serverless functions handle the proxy
  */
-export const API_BASE_URL = 'https://www.thesportsdb.com/api/v1/json/3'
-
 export const ENDPOINTS = {
-  ALL_LEAGUES: `${API_BASE_URL}/all_leagues.php`,
-  SEASON_BADGES: (leagueId: string) =>
-    `${API_BASE_URL}/search_all_seasons.php?badge=1&id=${leagueId}`
+  ALL_LEAGUES: '/api/leagues',
+  SEASON_BADGES: (leagueId: string) => `/api/seasons?id=${leagueId}`
 } as const
 
 /**
