@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, watch, onUnmounted } from 'vue'
+import { ref, watch, onUnmounted, nextTick } from 'vue'
 import { fetchLeagueBadge } from '@/api/leagues'
+import { ApiError } from '@/api/client'
 import { BADGE_PLACEHOLDER } from '@/constants/api'
 import type { League, SeasonBadge, AsyncState } from '@/types/league'
 
@@ -14,23 +15,53 @@ const emit = defineEmits<{
 }>()
 
 const modalContent = ref<HTMLElement | null>(null)
+const closeButton = ref<HTMLButtonElement | null>(null)
 const badge = ref<SeasonBadge | null>(null)
 const state = ref<AsyncState<SeasonBadge>>({ status: 'idle' })
 
+// Track current request to prevent stale responses (P0 fix)
+let currentAbortController: AbortController | null = null
+let currentLeagueId: string | null = null
+
 async function loadBadge() {
   if (!props.league) return
+
+  const leagueId = props.league.idLeague
+
+  // Cancel any in-flight request for a different league
+  if (currentAbortController && currentLeagueId !== leagueId) {
+    currentAbortController.abort()
+  }
+
+  // Create new abort controller for this request
+  currentAbortController = new AbortController()
+  currentLeagueId = leagueId
 
   state.value = { status: 'loading' }
   badge.value = null
 
   try {
-    const data = await fetchLeagueBadge(props.league.idLeague)
+    const data = await fetchLeagueBadge(leagueId, currentAbortController.signal)
+
+    // Verify this response is still for the current league (prevents stale rendering)
+    if (currentLeagueId !== leagueId) {
+      return
+    }
+
     badge.value = data
     state.value = data ? { status: 'success', data } : { status: 'success', data: null as unknown as SeasonBadge }
   } catch (err) {
-    state.value = {
-      status: 'error',
-      error: err instanceof Error ? err.message : 'Failed to load badge. Please try again.'
+    // Ignore aborted requests
+    if (err instanceof ApiError && err.isAborted) {
+      return
+    }
+
+    // Only update state if still the current request
+    if (currentLeagueId === leagueId) {
+      state.value = {
+        status: 'error',
+        error: err instanceof Error ? err.message : 'Failed to load badge. Please try again.'
+      }
     }
   }
 }
@@ -38,12 +69,6 @@ async function loadBadge() {
 function handleImageError(event: Event) {
   const img = event.target as HTMLImageElement
   img.src = BADGE_PLACEHOLDER
-}
-
-function handleKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') {
-    emit('close')
-  }
 }
 
 // Watch for league changes to load badge
@@ -60,27 +85,66 @@ watch(
   { immediate: true }
 )
 
-// Focus management and body scroll lock
+// Focus management, focus trap, and body scroll lock (P2 accessibility)
+let previouslyFocusedElement: HTMLElement | null = null
+
 watch(
   () => props.visible,
-  (isVisible) => {
+  async (isVisible) => {
     if (isVisible) {
+      // Store the element that had focus before opening
+      previouslyFocusedElement = document.activeElement as HTMLElement
+
       // Lock body scroll
       document.body.style.overflow = 'hidden'
-      // Focus modal content
-      setTimeout(() => {
-        modalContent.value?.focus()
-      }, 0)
+
+      // Focus close button after render
+      await nextTick()
+      closeButton.value?.focus()
     } else {
       // Restore body scroll
       document.body.style.overflow = ''
+
+      // Restore focus to previously focused element
+      previouslyFocusedElement?.focus()
+      previouslyFocusedElement = null
     }
   }
 )
 
+// Focus trap: keep focus within modal (P2 accessibility)
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    emit('close')
+    return
+  }
+
+  // Focus trap: Tab key cycles within modal
+  if (event.key === 'Tab' && modalContent.value) {
+    const focusableElements = modalContent.value.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )
+
+    if (focusableElements.length === 0) return
+
+    const firstElement = focusableElements[0]
+    const lastElement = focusableElements[focusableElements.length - 1]
+
+    if (event.shiftKey && document.activeElement === firstElement) {
+      event.preventDefault()
+      lastElement.focus()
+    } else if (!event.shiftKey && document.activeElement === lastElement) {
+      event.preventDefault()
+      firstElement.focus()
+    }
+  }
+}
+
 // Cleanup on unmount
 onUnmounted(() => {
   document.body.style.overflow = ''
+  // Cancel any pending request
+  currentAbortController?.abort()
 })
 </script>
 
@@ -102,6 +166,7 @@ onUnmounted(() => {
             <span class="modal__subtitle">{{ league.strSport }}</span>
           </div>
           <button
+            ref="closeButton"
             class="modal__close"
             type="button"
             aria-label="Close modal"

@@ -1,7 +1,8 @@
 import { ref, computed, watch, onUnmounted, shallowRef, getCurrentInstance } from 'vue'
 import { fetchAllLeagues, extractSportTypes } from '@/api/leagues'
+import type { NormalizedLeague } from '@/api/leagues'
 import { debounce } from '@/utils/debounce'
-import type { League, AsyncState } from '@/types/league'
+import type { AsyncState } from '@/types/league'
 
 const DEBOUNCE_DELAY_MS = 250
 
@@ -10,6 +11,7 @@ const DEBOUNCE_DELAY_MS = 250
  *
  * Features:
  * - Fetches leagues from API with loading/error/success states
+ * - Pre-normalized search fields for fast filtering
  * - Debounced search input to avoid excessive filtering
  * - Sport type filtering
  * - Client-side pagination
@@ -17,8 +19,8 @@ const DEBOUNCE_DELAY_MS = 250
  */
 export function useLeagues() {
   // Use shallowRef for large arrays - individual league objects don't need deep reactivity
-  const leagues = shallowRef<League[]>([])
-  const state = ref<AsyncState<League[]>>({ status: 'idle' })
+  const leagues = shallowRef<NormalizedLeague[]>([])
+  const state = ref<AsyncState<NormalizedLeague[]>>({ status: 'idle' })
 
   // Filter state
   const searchQuery = ref('')
@@ -49,17 +51,15 @@ export function useLeagues() {
   // Computed: unique sport types from raw data (computed once, not on every filter)
   const sportTypes = computed(() => extractSportTypes(leagues.value))
 
-  // Computed: filtered leagues based on search and sport selection
+  // Computed: filtered leagues using pre-normalized search fields
   const filteredLeagues = computed(() => {
     let result = leagues.value
 
-    // Apply search filter (uses debounced value)
+    // Apply search filter using pre-normalized fields (no per-item toLowerCase)
     if (debouncedSearchQuery.value.trim()) {
       const query = debouncedSearchQuery.value.toLowerCase().trim()
       result = result.filter((league) => {
-        const name = league.strLeague?.toLowerCase() || ''
-        const alternate = league.strLeagueAlternate?.toLowerCase() || ''
-        return name.includes(query) || alternate.includes(query)
+        return league._searchName.includes(query) || league._searchAlternate.includes(query)
       })
     }
 

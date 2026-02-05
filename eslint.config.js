@@ -1,6 +1,8 @@
 import pluginVue from 'eslint-plugin-vue'
+import tseslint from 'typescript-eslint'
+import vueTsEslintConfig from '@vue/eslint-config-typescript'
 
-export default [
+export default tseslint.config(
   {
     name: 'app/files-to-lint',
     files: ['**/*.{ts,mts,tsx,vue}']
@@ -10,9 +12,10 @@ export default [
     ignores: ['**/dist/**', '**/dist-ssr/**', '**/coverage/**']
   },
   ...pluginVue.configs['flat/essential'],
+  ...vueTsEslintConfig(),
   {
     rules: {
       'vue/multi-word-component-names': 'off'
     }
   }
-]
+)

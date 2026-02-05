@@ -16,7 +16,7 @@ export const ENDPOINTS = {
  */
 export const PAGINATION = {
   PAGE_SIZE: 20,
-  PAGE_SIZE_OPTIONS: [10, 20, 50, 100]
+  PAGE_SIZE_OPTIONS: [5, 10, 20, 50, 100]
 } as const
 
 /**
