@@ -2,6 +2,7 @@ import { ref, computed, watch, onUnmounted, shallowRef, getCurrentInstance } fro
 import { fetchAllLeagues, extractSportTypes } from '@/api/leagues'
 import type { NormalizedLeague } from '@/api/leagues'
 import { debounce } from '@/utils/debounce'
+import { useBadges } from './useBadges'
 import type { AsyncState } from '@/types/league'
 
 const DEBOUNCE_DELAY_MS = 250
@@ -41,10 +42,11 @@ export function useLeagues() {
     updateDebouncedSearch(newValue)
   })
 
-  // Cleanup debounce on unmount (only in component context)
+  // Cleanup on unmount (only in component context)
   if (getCurrentInstance()) {
     onUnmounted(() => {
       updateDebouncedSearch.cancel()
+      cancelPrefetch()
     })
   }
 
@@ -91,8 +93,11 @@ export function useLeagues() {
     currentPage.value = 1
   })
 
+  // Badge prefetching
+  const { prefetchBadges, cancelPrefetch } = useBadges()
+
   /**
-   * Load leagues from API
+   * Load leagues from API and prefetch badges in background
    */
   async function loadLeagues() {
     state.value = { status: 'loading' }
@@ -101,6 +106,10 @@ export function useLeagues() {
       const data = await fetchAllLeagues()
       leagues.value = data
       state.value = { status: 'success', data }
+
+      // Prefetch badges in background (non-blocking)
+      const leagueIds = data.map((league) => league.idLeague)
+      prefetchBadges(leagueIds)
     } catch (err) {
       state.value = {
         status: 'error',

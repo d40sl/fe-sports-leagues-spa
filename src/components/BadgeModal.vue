@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { ref, watch, onUnmounted, nextTick } from 'vue'
-import { fetchLeagueBadge } from '@/api/leagues'
-import { ApiError } from '@/api/client'
+import { computed, watch, onUnmounted, nextTick, ref } from 'vue'
+import { useBadges } from '@/composables/useBadges'
 import { BADGE_PLACEHOLDER } from '@/constants/api'
-import type { League, SeasonBadge, AsyncState } from '@/types/league'
+import type { League } from '@/types/league'
 
 const props = defineProps<{
   visible: boolean
@@ -16,76 +15,38 @@ const emit = defineEmits<{
 
 const modalContent = ref<HTMLElement | null>(null)
 const closeButton = ref<HTMLButtonElement | null>(null)
-const badge = ref<SeasonBadge | null>(null)
-const state = ref<AsyncState<SeasonBadge>>({ status: 'idle' })
 
-// Track current request to prevent stale responses (P0 fix)
-let currentAbortController: AbortController | null = null
-let currentLeagueId: string | null = null
+// Use the shared badge store
+const { badgeStore, getBadgeEntry, retryBadge } = useBadges()
 
-async function loadBadge() {
-  if (!props.league) return
+// Computed: get badge entry for current league (reactive)
+const badgeEntry = computed(() => {
+  if (!props.league) return null
+  return getBadgeEntry(props.league.idLeague)
+})
 
-  const leagueId = props.league.idLeague
+// Computed: badge status
+const status = computed(() => badgeEntry.value?.status ?? 'idle')
 
-  // Cancel any in-flight request for a different league
-  if (currentAbortController && currentLeagueId !== leagueId) {
-    currentAbortController.abort()
-  }
+// Computed: badge data
+const badge = computed(() => badgeEntry.value?.badge ?? null)
 
-  // Create new abort controller for this request
-  currentAbortController = new AbortController()
-  currentLeagueId = leagueId
-
-  state.value = { status: 'loading' }
-  badge.value = null
-
-  try {
-    const data = await fetchLeagueBadge(leagueId, currentAbortController.signal)
-
-    // Verify this response is still for the current league (prevents stale rendering)
-    if (currentLeagueId !== leagueId) {
-      return
-    }
-
-    badge.value = data
-    state.value = data ? { status: 'success', data } : { status: 'success', data: null as unknown as SeasonBadge }
-  } catch (err) {
-    // Ignore aborted requests
-    if (err instanceof ApiError && err.isAborted) {
-      return
-    }
-
-    // Only update state if still the current request
-    if (currentLeagueId === leagueId) {
-      state.value = {
-        status: 'error',
-        error: err instanceof Error ? err.message : 'Failed to load badge. Please try again.'
-      }
-    }
-  }
-}
+// Force reactivity by accessing badgeStore
+ 
+const _forceReactivity = computed(() => badgeStore.size)
 
 function handleImageError(event: Event) {
   const img = event.target as HTMLImageElement
   img.src = BADGE_PLACEHOLDER
 }
 
-// Watch for league changes to load badge
-watch(
-  () => props.league,
-  (newLeague) => {
-    if (newLeague) {
-      loadBadge()
-    } else {
-      badge.value = null
-      state.value = { status: 'idle' }
-    }
-  },
-  { immediate: true }
-)
+async function handleRetry() {
+  if (props.league) {
+    await retryBadge(props.league.idLeague)
+  }
+}
 
-// Focus management, focus trap, and body scroll lock (P2 accessibility)
+// Focus management, focus trap, and body scroll lock
 let previouslyFocusedElement: HTMLElement | null = null
 
 watch(
@@ -112,7 +73,7 @@ watch(
   }
 )
 
-// Focus trap: keep focus within modal (P2 accessibility)
+// Focus trap: keep focus within modal
 function handleKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') {
     emit('close')
@@ -143,8 +104,6 @@ function handleKeydown(event: KeyboardEvent) {
 // Cleanup on unmount
 onUnmounted(() => {
   document.body.style.overflow = ''
-  // Cancel any pending request
-  currentAbortController?.abort()
 })
 </script>
 
@@ -187,8 +146,8 @@ onUnmounted(() => {
         </div>
 
         <div class="modal__body">
-          <!-- Loading State -->
-          <div v-if="state.status === 'loading'" class="modal__loading">
+          <!-- Loading State (still prefetching) -->
+          <div v-if="status === 'loading' || status === 'idle'" class="modal__loading">
             <div class="spinner">
               <span class="spinner__circle"></span>
             </div>
@@ -196,13 +155,15 @@ onUnmounted(() => {
           </div>
 
           <!-- Error State -->
-          <div v-else-if="state.status === 'error'" class="modal__error">
-            <p>{{ state.error }}</p>
-            <button class="btn btn--secondary" type="button" @click="loadBadge">Try Again</button>
+          <div v-else-if="status === 'error'" class="modal__error">
+            <p>Failed to load badge. Please try again.</p>
+            <button class="btn btn--secondary" type="button" @click="handleRetry">Try Again</button>
           </div>
 
           <!-- Success State -->
-          <div v-else-if="state.status === 'success'" class="modal__content">
+          <div v-else-if="status === 'success'" class="modal__content">
+            <!-- Hidden element to force reactivity -->
+            <span v-if="_forceReactivity" style="display: none"></span>
             <div class="badge-container">
               <img
                 v-if="badge && badge.strBadge"
