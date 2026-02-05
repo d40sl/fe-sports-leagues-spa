@@ -14,6 +14,12 @@ A single-page application that displays sports leagues from TheSportsDB API with
 - Responsive design (360px mobile baseline)
 - Keyboard accessible (Tab, Enter, Space, Escape)
 
+## Video Walkthrough
+
+Watch a quick demo of the app and technical highlights:
+
+[![Loom Video](https://img.shields.io/badge/Loom-Video_Walkthrough-blueviolet?logo=loom)](https://www.loom.com/share/fd1854f835b24eb68906a90ce3cb010b)
+
 ## Architecture Overview
 
 ```
