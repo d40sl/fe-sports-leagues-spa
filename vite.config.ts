@@ -5,7 +5,7 @@ import vue from '@vitejs/plugin-vue'
 export default defineConfig(({ mode }) => {
   // Load env file based on mode (development, production, etc.)
   const env = loadEnv(mode, process.cwd(), '')
-  const apiKey = env.SPORTSDB_API_KEY || '3'
+  const apiKey = env.SPORTSDB_API_KEY || '123'
 
   return {
     plugins: [vue()],

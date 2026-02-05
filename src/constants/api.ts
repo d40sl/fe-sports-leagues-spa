@@ -2,8 +2,8 @@
  * API endpoints configuration
  *
  * All requests go through our API proxy which:
- * - Keeps the API key secure on the server side
- * - Works with both free tier (key: 3) and premium keys
+ * - Keeps the API key secure on the server side (SPORTSDB_API_KEY env var)
+ * - Works with both free tier (key: 123) and premium keys
  * - Adds caching headers for better performance
  *
  * Development: Vite dev server proxies to TheSportsDB
