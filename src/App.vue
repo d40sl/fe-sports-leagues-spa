@@ -1,5 +1,38 @@
 <script setup lang="ts">
-// App component - will be implemented in subsequent slices
+import { ref, onMounted } from 'vue'
+import LeagueFilters from './components/LeagueFilters.vue'
+import LeagueList from './components/LeagueList.vue'
+import BadgeModal from './components/BadgeModal.vue'
+import { useLeagues } from './composables/useLeagues'
+import type { League } from './types/league'
+
+const {
+  state,
+  searchQuery,
+  selectedSport,
+  currentPage,
+  pageSize,
+  sportTypes,
+  filteredLeagues,
+  paginatedLeagues,
+  loadLeagues,
+  setPageSize,
+  goToPage
+} = useLeagues()
+
+const selectedLeague = ref<League | null>(null)
+
+function handleLeagueSelect(league: League) {
+  selectedLeague.value = league
+}
+
+function closeModal() {
+  selectedLeague.value = null
+}
+
+onMounted(() => {
+  loadLeagues()
+})
 </script>
 
 <template>
@@ -10,8 +43,46 @@
         <span class="app-subtitle">League Directory</span>
       </div>
     </header>
+
     <main class="app-main">
-      <p>Vue 3 project scaffold complete. Implementation coming next.</p>
+      <!-- Loading State -->
+      <div v-if="state.status === 'loading'" class="app-loading">
+        <div class="spinner" role="status" aria-label="Loading leagues">
+          <span class="spinner__circle"></span>
+        </div>
+        <p>Loading leagues...</p>
+      </div>
+
+      <!-- Error State -->
+      <div v-else-if="state.status === 'error'" class="app-error" role="alert">
+        <div class="app-error__icon">!</div>
+        <p class="app-error__message">{{ state.error }}</p>
+        <button class="btn btn--danger" type="button" @click="loadLeagues">Try Again</button>
+      </div>
+
+      <!-- Success State -->
+      <template v-else-if="state.status === 'success'">
+        <LeagueFilters
+          :search-query="searchQuery"
+          :selected-sport="selectedSport"
+          :sports="sportTypes"
+          @update:search-query="searchQuery = $event"
+          @update:selected-sport="selectedSport = $event"
+        />
+
+        <LeagueList
+          :leagues="paginatedLeagues"
+          :total-count="filteredLeagues.length"
+          :current-page="currentPage"
+          :page-size="pageSize"
+          @select="handleLeagueSelect"
+          @page-change="goToPage"
+          @page-size-change="setPageSize"
+        />
+      </template>
+
+      <!-- Badge Modal -->
+      <BadgeModal :visible="selectedLeague !== null" :league="selectedLeague" @close="closeModal" />
     </main>
   </div>
 </template>
@@ -60,5 +131,51 @@
   @media (min-width: $breakpoint-md) {
     padding: $spacing-xl $spacing-lg;
   }
+}
+
+// Loading State
+.app-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-2xl;
+  color: $color-text-secondary;
+
+  p {
+    margin-top: $spacing-md;
+    font-size: $font-size-sm;
+  }
+}
+
+// Error State
+.app-error {
+  text-align: center;
+  padding: $spacing-xl;
+  background: $color-background-white;
+  border: 1px solid $color-border;
+  border-radius: $border-radius-md;
+  max-width: 400px;
+  margin: $spacing-xl auto;
+}
+
+.app-error__icon {
+  width: 40px;
+  height: 40px;
+  background: #fef2f2;
+  color: $color-danger;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: $font-weight-semibold;
+  font-size: $font-size-lg;
+  margin: 0 auto $spacing-md;
+}
+
+.app-error__message {
+  color: $color-text-regular;
+  margin-bottom: $spacing-md;
+  font-size: $font-size-sm;
 }
 </style>
