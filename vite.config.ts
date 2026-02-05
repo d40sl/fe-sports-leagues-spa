@@ -31,14 +31,18 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           rewrite: () => '/all_leagues.php'
         },
+        // For seasons, we use configure to access the full request URL including query params
         '/api/seasons': {
           target: `https://www.thesportsdb.com`,
           changeOrigin: true,
-          rewrite: (path) => {
-            // path includes query string: /api/seasons?id=4328
-            const idMatch = path.match(/[?&]id=(\d+)/)
-            const id = idMatch ? idMatch[1] : ''
-            return `/api/v1/json/${apiKey}/search_all_seasons.php?badge=1&id=${id}`
+          configure: (proxy) => {
+            proxy.on('proxyReq', (proxyReq, req) => {
+              // Get league ID from query string
+              const reqUrl = new URL(req.url || '', `http://${req.headers.host}`)
+              const leagueId = reqUrl.searchParams.get('id') || ''
+              // Rewrite to the correct TheSportsDB endpoint
+              proxyReq.path = `/api/v1/json/${apiKey}/search_all_seasons.php?badge=1&id=${leagueId}`
+            })
           }
         }
       }
